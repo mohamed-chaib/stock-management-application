@@ -1,0 +1,61 @@
+appId: com.stockpos.app
+productName: StockPOS
+copyright: Copyright © 2026 Stock POS
+buildDependenciesFromSource: false
+directories:
+  output: release
+  buildResources: build
+
+files:
+  - dist/**/*
+  - dist-electron/**/*
+  - node_modules/**/*
+  - "!src/**/*"
+  - "!scripts/**/*"
+  - "!electron/licensing/keys/private.pem"
+  - "!.git/**/*"
+
+npmRebuild: false
+win:
+  target:
+    - nsis
+  icon: build/icon.ico
+  executableName: StockPOS
+  verifyUpdateCodeSignature: false
+  artifactName: "${productName}-Setup-${version}.${ext}"
+
+nsis:
+  oneClick: false
+  perMachine: true
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: StockPOS
+  installerIcon: build/icon.ico
+  uninstallerIcon: build/icon.ico
+  installerHeaderIcon: build/icon.ico
+  deleteAppDataOnUninstall: false
+  artifactName: "${productName}-Setup-${version}.${ext}"
+
+linux:
+  target:
+    - AppImage
+    - deb
+
+  category: Office
+  icon: build/icon.png
+  maintainer: "Mohammed Chaib <mchaib391@gmail.com>"
+  artifactName: "${productName}-${version}-${arch}.${ext}"
+
+asar: true
+
+asarUnpack:
+  - "**/*.node"
+  - node_modules/better-sqlite3/**/*
+  - node_modules/bindings/**
+
+extraResources:
+  - from: electron/licensing/keys/public.pem
+    to: keys/public.pem
+extraMetadata:
+  name: StockPOS

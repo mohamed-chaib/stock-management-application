@@ -1,0 +1,30 @@
+electron/licensing/keys/private.pem
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+dist-electron/
+release/
+
+# ─── CRITICAL: Never commit the private signing key ───
+electron/licensing/keys/private.pem
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+npm-debug.log*
+
+# Environment
+.env
+.env.local
+

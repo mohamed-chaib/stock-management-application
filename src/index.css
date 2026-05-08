@@ -1,0 +1,101 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --border: 214.3 31.8% 91.4%;
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --border: 217.2 32.6% 17.5%;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+}
+
+/* ═══════════════════════════════════════════
+   PRINT STYLES — Production Invoice System
+   
+   Strategy: use VISIBILITY (not display) so 
+   the DOM tree stays intact and the invoice 
+   element can be reached regardless of nesting.
+   ═══════════════════════════════════════════ */
+
+@media print {
+  @page {
+    margin: 0;
+    padding: 0;
+    size: auto;
+  }
+
+  html, body {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    background: #fff !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Step 1: Hide ALL elements via visibility (keeps layout tree alive) */
+  body * {
+    visibility: hidden !important;
+  }
+
+  /* Step 2: Show the invoice and ALL its children */
+  #printable-invoice,
+  #printable-invoice * {
+    visibility: visible !important;
+  }
+
+  /* Step 3: Position the invoice at the top of the page */
+  #printable-invoice {
+    display: block !important;
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    max-width: 80mm !important;
+    margin: 0 auto !important;
+    right: 0 !important;
+    padding: 2mm 3mm !important;
+    z-index: 999999 !important;
+    background: #fff !important;
+    color: #000 !important;
+    font-family: 'Courier New', 'Courier', 'Liberation Mono', monospace !important;
+    font-size: 11px !important;
+    line-height: 1.4 !important;
+  }
+
+  /* Force black-on-white for all invoice content */
+  #printable-invoice div,
+  #printable-invoice span,
+  #printable-invoice p,
+  #printable-invoice td,
+  #printable-invoice th,
+  #printable-invoice h1,
+  #printable-invoice h2,
+  #printable-invoice h3,
+  #printable-invoice table {
+    color: #000 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+    border-radius: 0 !important;
+  }
+
+  /* Prevent table rows from breaking across pages */
+  #printable-invoice table {
+    page-break-inside: avoid;
+  }
+  #printable-invoice tr {
+    page-break-inside: avoid;
+  }
+}
