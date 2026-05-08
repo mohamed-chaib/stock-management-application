@@ -48,7 +48,7 @@ linux:
   artifactName: "${productName}-${version}-${arch}.${ext}"
 
 asar: true
-
+publish: null
 asarUnpack:
   - "**/*.node"
   - node_modules/better-sqlite3/**/*
