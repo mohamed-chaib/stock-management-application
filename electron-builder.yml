@@ -1,61 +1,76 @@
 appId: com.stockpos.app
 productName: StockPOS
-copyright: Copyright © 2026 Stock POS
-buildDependenciesFromSource: false
+copyright: "Copyright © 2026 StockPOS"
+
 directories:
   output: release
   buildResources: build
 
+# DO NOT list node_modules here — electron-builder auto-includes prod deps
 files:
   - dist/**/*
   - dist-electron/**/*
-  - node_modules/**/*
   - "!src/**/*"
   - "!scripts/**/*"
-  - "!electron/licensing/keys/private.pem"
+  - "!electron/**/*"
+  - "!.github/**/*"
   - "!.git/**/*"
+  - "!*.md"
+  - "!electron/licensing/keys/private.pem"
 
-npmRebuild: false
+# CRITICAL: rebuild native modules for Electron's exact ABI
+npmRebuild: true
+buildDependenciesFromSource: false
+
+# ASAR on, but native .node binaries MUST live outside it
+asar: true
+asarUnpack:
+  - "**/*.node"
+  - "node_modules/better-sqlite3/**"
+  - "node_modules/bindings/**"
+  - "node_modules/file-uri-to-path/**"
+  - "node_modules/node-machine-id/**"
+
+extraResources:
+  - from: "electron/licensing/keys/public.pem"
+    to: "keys/public.pem"
+
+extraMetadata:
+  name: StockPOS
+
+publish: null
+
+# ─── Windows ────────────────────────────────────────────────────────────────
 win:
   target:
-    - nsis
+    - target: nsis
+      arch: [x64]
   icon: build/icon.ico
   executableName: StockPOS
+  # Don't require UAC elevation unless you need perMachine install
+  requestedExecutionLevel: asInvoker
   verifyUpdateCodeSignature: false
   artifactName: "${productName}-Setup-${version}.${ext}"
 
 nsis:
   oneClick: false
-  perMachine: true
+  # perMachine: true requires UAC Admin prompt — set false for easier installs
+  perMachine: false
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
   shortcutName: StockPOS
   installerIcon: build/icon.ico
   uninstallerIcon: build/icon.ico
-  installerHeaderIcon: build/icon.ico
   deleteAppDataOnUninstall: false
   artifactName: "${productName}-Setup-${version}.${ext}"
 
+# ─── Linux ──────────────────────────────────────────────────────────────────
 linux:
   target:
     - AppImage
     - deb
-
   category: Office
   icon: build/icon.png
   maintainer: "Mohammed Chaib <mchaib391@gmail.com>"
   artifactName: "${productName}-${version}-${arch}.${ext}"
-
-asar: true
-publish: null
-asarUnpack:
-  - "**/*.node"
-  - node_modules/better-sqlite3/**/*
-  - node_modules/bindings/**
-
-extraResources:
-  - from: electron/licensing/keys/public.pem
-    to: keys/public.pem
-extraMetadata:
-  name: StockPOS

@@ -13,7 +13,7 @@ export default defineConfig({
         vite: {
           build: {
             rollupOptions: {
-              external: ['better-sqlite3', 'adm-zip', 'node-machine-id']
+              external: ['better-sqlite3', 'adm-zip', 'node-machine-id', 'bindings', 'systeminformation']
             }
           }
         }

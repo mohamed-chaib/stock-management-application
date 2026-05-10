@@ -1,4 +1,18 @@
 import { app, BrowserWindow } from 'electron'
+import { appendFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { homedir } from 'node:os'
+
+// ─── Crash logger (writes to ~/stockpos-crash.log) ──────────────────────────
+const crashLog = join(homedir(), 'stockpos-crash.log')
+process.on('uncaughtException', (err) => {
+  appendFileSync(crashLog, `[${new Date().toISOString()}] CRASH: ${err.stack}\n`)
+  app.quit()
+})
+process.on('unhandledRejection', (reason) => {
+  appendFileSync(crashLog, `[${new Date().toISOString()}] UNHANDLED: ${String(reason)}\n`)
+})
+// ────────────────────────────────────────────────────────────────────────────
 
 
 import { getDB } from './database/db'
