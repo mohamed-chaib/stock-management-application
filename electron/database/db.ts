@@ -6,13 +6,17 @@ let db: Database.Database | null = null
 
 export function getDB() {
   if (db) return db
-  
+
   const dbPath = path.join(app.getPath('userData'), 'stock-manager.db')
   db = new Database(dbPath)
   db.pragma('journal_mode = WAL')
-  db.pragma('foreign_keys = ON')
+  db.pragma('foreign_keys = OFF') // OFF during schema setup to allow ALTER TABLE migrations
 
-  const schema = `
+  // ─── Step 1: Create all tables (fresh install path) ───────────────────────
+  // The Sales table NOW includes client_id, paid_amount, and status from the start.
+  // This was the root cause of "no such column: client_id" on fresh Windows installs —
+  // the old CREATE TABLE was missing those columns and the index referenced them before migration ran.
+  db.exec(`
     CREATE TABLE IF NOT EXISTS Users (
         id TEXT PRIMARY KEY,
         username TEXT UNIQUE NOT NULL,
@@ -34,16 +38,30 @@ export function getDB() {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
+    CREATE TABLE IF NOT EXISTS Clients (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        phone TEXT,
+        email TEXT,
+        total_purchases REAL DEFAULT 0,
+        total_paid REAL DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE TABLE IF NOT EXISTS Sales (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         invoice_number TEXT UNIQUE NOT NULL,
         user_id TEXT,
+        client_id TEXT DEFAULT 'default',
         total_amount REAL DEFAULT 0,
+        paid_amount REAL DEFAULT 0,
         discount REAL DEFAULT 0,
         tax REAL DEFAULT 0,
         payment_method TEXT DEFAULT 'cash',
+        status TEXT DEFAULT 'paid',
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY(user_id) REFERENCES Users(id)
+        FOREIGN KEY(user_id) REFERENCES Users(id),
+        FOREIGN KEY(client_id) REFERENCES Clients(id)
     );
 
     CREATE TABLE IF NOT EXISTS Sale_Items (
@@ -55,16 +73,6 @@ export function getDB() {
         subtotal REAL NOT NULL,
         FOREIGN KEY(sale_id) REFERENCES Sales(id),
         FOREIGN KEY(product_id) REFERENCES Products(id)
-    );
-
-    CREATE TABLE IF NOT EXISTS Clients (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        phone TEXT,
-        email TEXT,
-        total_purchases REAL DEFAULT 0,
-        total_paid REAL DEFAULT 0,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
     CREATE TABLE IF NOT EXISTS Payments (
@@ -116,7 +124,28 @@ export function getDB() {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY(product_id) REFERENCES Products(id)
     );
+  `)
 
+  // ─── Step 2: Migrations for existing databases ────────────────────────────
+  // Each ALTER TABLE only runs if the column is missing.
+  // Safe to execute on every startup.
+  const salesColumns = (db.pragma('table_info(Sales)') as any[]).map((c: any) => c.name)
+
+  if (!salesColumns.includes('client_id')) {
+    db.exec(`ALTER TABLE Sales ADD COLUMN client_id TEXT DEFAULT 'default';`)
+  }
+  if (!salesColumns.includes('paid_amount')) {
+    db.exec(`ALTER TABLE Sales ADD COLUMN paid_amount REAL DEFAULT 0;`)
+    db.exec(`UPDATE Sales SET paid_amount = total_amount WHERE paid_amount IS NULL OR paid_amount = 0;`)
+  }
+  if (!salesColumns.includes('status')) {
+    db.exec(`ALTER TABLE Sales ADD COLUMN status TEXT DEFAULT 'paid';`)
+    db.exec(`UPDATE Sales SET status = 'paid' WHERE status IS NULL;`)
+  }
+
+  // ─── Step 3: Indexes ──────────────────────────────────────────────────────
+  // Created AFTER migrations — columns are guaranteed to exist at this point.
+  db.exec(`
     CREATE INDEX IF NOT EXISTS idx_stock_entries_product_id ON Stock_Entries(product_id);
     CREATE INDEX IF NOT EXISTS idx_stock_entries_created_at ON Stock_Entries(created_at);
     CREATE INDEX IF NOT EXISTS idx_sale_items_sale_id ON Sale_Items(sale_id);
@@ -126,41 +155,32 @@ export function getDB() {
     CREATE INDEX IF NOT EXISTS idx_stock_history_product_id ON Stock_History(product_id);
     CREATE INDEX IF NOT EXISTS idx_stock_history_type ON Stock_History(type);
     CREATE INDEX IF NOT EXISTS idx_stock_history_created_at ON Stock_History(created_at);
+  `)
 
-    INSERT INTO Users (id, username, password_hash, role) 
-    SELECT '1', 'admin', 'admin', 'admin' 
+  // ─── Step 4: Seed default data ────────────────────────────────────────────
+  db.exec(`
+    INSERT INTO Users (id, username, password_hash, role)
+    SELECT '1', 'admin', 'admin', 'admin'
     WHERE NOT EXISTS (SELECT 1 FROM Users WHERE username = 'admin');
 
     INSERT INTO Clients (id, name, total_purchases, total_paid)
     SELECT 'default', 'Walk-in Customer', 0, 0
     WHERE NOT EXISTS (SELECT 1 FROM Clients WHERE id = 'default');
-  `
-  db.exec(schema)
+  `)
 
-  // Migration for Sales Table
-  const salesColumns = db.pragma('table_info(Sales)') as any[];
-  const hasClientId = salesColumns.some(col => col.name === 'client_id');
-
-  if (!hasClientId) {
-      db.exec(`
-          ALTER TABLE Sales ADD COLUMN client_id TEXT DEFAULT 'default';
-          ALTER TABLE Sales ADD COLUMN paid_amount REAL DEFAULT 0;
-          ALTER TABLE Sales ADD COLUMN status TEXT DEFAULT 'paid';
-          
-          UPDATE Sales SET client_id = 'default', paid_amount = total_amount, status = 'paid';
-      `);
-  }
-
-  // Migration for Stock_Entries backwards compatibility
-  const stockEntriesCount = db.prepare('SELECT COUNT(*) as count FROM Stock_Entries').get() as {count: number};
+  // ─── Step 5: Stock_Entries backfill for legacy databases ─────────────────
+  const stockEntriesCount = db.prepare('SELECT COUNT(*) as count FROM Stock_Entries').get() as { count: number }
   if (stockEntriesCount.count === 0) {
-      db.exec(`
-          INSERT INTO Stock_Entries (product_id, quantity, purchase_price, remaining_quantity, created_at)
-          SELECT id, stock_quantity, purchase_price, stock_quantity, created_at
-          FROM Products
-          WHERE stock_quantity > 0;
-      `);
+    db.exec(`
+      INSERT INTO Stock_Entries (product_id, quantity, purchase_price, remaining_quantity, created_at)
+      SELECT id, stock_quantity, purchase_price, stock_quantity, created_at
+      FROM Products
+      WHERE stock_quantity > 0;
+    `)
   }
+
+  // Re-enable foreign key enforcement after all migrations complete
+  db.pragma('foreign_keys = ON')
 
   return db
 }
